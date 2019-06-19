@@ -1,0 +1,26 @@
+{
+  "name": "spi",
+  "version": "1.0.0",
+  "description": "Simple Pascal Interpreter",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/awbear/SPI.git"
+  },
+  "keywords": [
+    "pascal"
+  ],
+  "author": "awbear",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/awbear/SPI/issues"
+  },
+  "homepage": "https://github.com/awbear/SPI#readme",
+  "devDependencies": {
+    "@types/node": "^12.0.8",
+    "typescript": "^3.5.2"
+  }
+}
