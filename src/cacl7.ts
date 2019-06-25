@@ -231,6 +231,10 @@ export class Parser {
         }
         return node;
     }
+
+    parse() {
+        return this.expr()
+    }
 }
 
 //###############################################################################
@@ -248,17 +252,40 @@ export class NodeVisitor {
         const method_name = `visit_${node.constructor.name}`;
         // @ts-ignore
         const visitor = (this[method_name] as visitor_func) || this.generic_visit;
-        return visitor(node)
+        return visitor.call(this, node)
     }
     generic_visit(node: AST) {
         throw new Error(`No visit_${node.constructor.name} method`);
     }
 }
 
-export class Interpreter {
+export class Interpreter extends NodeVisitor {
     parser: Parser;
     constructor(parser: Parser) {
+        super();
         this.parser = parser;
+    }
+
+    visit_BinOp(node: BinOp) {
+        const t = node.op.type;
+        if (t === TokenType.PLUS) {
+            return this.visit(node.left) + this.visit(node.right);
+        } else if (t === TokenType.MINUS) {
+            return this.visit(node.left) - this.visit(node.right);
+        } else if (t === TokenType.MUL) {
+            return this.visit(node.left) * this.visit(node.right);
+        } else if (t === TokenType.DIV) {
+            return this.visit(node.left) / this.visit(node.right);
+        }
+    }
+
+    visit_Num(node: Num) {
+        return node.value;
+    }
+
+    interpret() {
+        const tree = this.parser.parse()
+        return this.visit(tree)
     }
 }
 
@@ -267,14 +294,14 @@ function main() {
       input: process.stdin,
       output: process.stdout
     });
-
     rl.question('calc> ', (text) => {
     if (!text) {
         return;
     }
     let lexer = new Lexer(text);
-    let interpreter = new Interpreter();
-        console.log(interpreter.expr())
+    let parser = new Parser(lexer);
+    let interpreter = new Interpreter(parser);
+        console.log(interpreter.interpret())
         rl.close();
     });
 }
