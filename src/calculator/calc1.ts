@@ -1,4 +1,4 @@
-import { isNumeric } from './helper';
+import { isdigit } from '../helper';
 import * as readline from 'readline';
 
 enum TokenType {
@@ -47,7 +47,7 @@ export class Interpreter {
             return new Token(TokenType.EOF, null)
         }
         let current_char = text[this.pos];
-        if (isNumeric(current_char)) {
+        if (isdigit(current_char)) {
             let token = new Token(TokenType.INTEGER, current_char)
             this.pos += 1;
             return token;

@@ -1,4 +1,4 @@
-import { isNumeric, isSpace } from './helper';
+import { isdigit, isSpace } from '../helper';
 import * as readline from 'readline';
 
 enum TokenType {
@@ -64,7 +64,7 @@ export class Lexer {
      */
     integer() {
         let result = '';
-        while(this.current_char && (isNumeric(this.current_char))){
+        while(this.current_char && (isdigit(this.current_char))){
             result += this.current_char;
             this.advance();
         }
@@ -78,7 +78,7 @@ export class Lexer {
                 continue;
             }
 
-            if (isNumeric(this.current_char)) {
+            if (isdigit(this.current_char)) {
                 return new Token(TokenType.INTEGER, this.integer())
             }
 

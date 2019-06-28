@@ -1,4 +1,4 @@
-import { isNumeric, isSpace } from './helper';
+import { isdigit, isSpace } from '../helper';
 import * as readline from 'readline';
 
 export enum TokenType {
@@ -66,7 +66,7 @@ export class Lexer {
      */
     integer() {
         let result = '';
-        while(this.current_char && (isNumeric(this.current_char))){
+        while(this.current_char && (isdigit(this.current_char))){
             result += this.current_char;
             this.advance();
         }
@@ -80,7 +80,7 @@ export class Lexer {
                 continue;
             }
 
-            if (isNumeric(this.current_char)) {
+            if (isdigit(this.current_char)) {
                 return new Token(TokenType.INTEGER, this.integer())
             }
 
@@ -144,16 +144,6 @@ export class BinOp extends AST {
     }
 }
 
-export class UnaryOp extends AST {
-    op: Token;
-    expr: AST;
-    constructor(op: Token, expr: AST) {
-        super();
-        this.op = op;
-        this.expr = expr;
-    }
-}
-
 
 export class Num extends AST {
     token: Token;
@@ -190,17 +180,11 @@ export class Parser {
 
     /**
      * return an INTEGER token value
-     * fator : (PLUS | MINUS) INTEGER | LPAREN expr RPAREN
+     * fator : INTEGER | LPAREN expr RPAREN
      */
     factor(): AST {
         let token = this.current_token;
-        if (token.type === TokenType.PLUS) {
-            this.eat(TokenType.PLUS);
-            return new UnaryOp(token, this.factor());
-        } else if (token.type === TokenType.MINUS) {
-            this.eat(TokenType.MINUS)
-            return new UnaryOp(token, this.factor());
-        } else if (token.type === TokenType.INTEGER) {
+        if (token.type === TokenType.INTEGER) {
             this.eat(TokenType.INTEGER)
             return new Num(token);
         } else if (token.type === TokenType.LPAREN) {
@@ -292,15 +276,6 @@ export class Interpreter extends NodeVisitor {
             return this.visit(node.left) * this.visit(node.right);
         } else if (t === TokenType.DIV) {
             return this.visit(node.left) / this.visit(node.right);
-        }
-    }
-
-    visit_UnaryOp(node: UnaryOp) {
-        const t = node.op.type;
-        if (t === TokenType.PLUS) {
-            return +this.visit(node.expr)
-        } else if (t === TokenType.MINUS) {
-            return -this.visit(node.expr);
         }
     }
 
