@@ -1,32 +1,9 @@
 import * as fs from 'fs';
 
 import { isdigit, isSpace, isalnum, isalpha } from '../helper';
+import { Token, TokenType } from './token'
+import { SymbolTable, VarSymbol } from './symbol';
 
-export enum TokenType {
-    INTEGER = 'INTEGER',
-    PLUS = 'PLUS',
-    MINUS = 'MINUS',
-    MUL = 'MUL',
-    DIV = 'DIV',
-    LPAREN = '(',
-    RPAREN = ')',
-    EOF = 'EOF',
-    BEGIN = 'BEGIN',
-    END = 'END',
-    ID = 'ID',
-    ASSIGN = ':=',
-    SEMI = ';',
-    DOT = '.',
-    PROGRAM = 'PROGRAM',
-    VAR = 'VAR',
-    COLON = 'COLON',
-    COMMA = 'COMMA',
-    REAL = 'REAL',
-    INTEGER_CONST = 'INTEGER_CONST',
-    REAL_CONST = 'REAL_CONST',
-    INTEGER_DIV = 'INTEGER_DIV',
-    FLOAT_DIV = 'FLOAT_DIV',
-}
 
 class NameError extends Error {
     constructor(msg='') {
@@ -34,24 +11,6 @@ class NameError extends Error {
         this.name = this.constructor.name;
     }
 }
-
-export class Token {
-    type: TokenType;
-    value: string | number | null;
-    constructor(type: TokenType, value: string | number | null) {
-        this.type = type;
-        this.value = value;
-    }
-
-    str() {
-        return `Token(${this.type}, ${this.value})`
-    }
-
-    repr() {
-        return this.str()
-    }
-}
-
 
 export class Lexer {
     text: string;
@@ -485,7 +444,7 @@ export class Parser {
         }
 
         if (this.current_token.type === TokenType.ID) {
-            this.error(this.current_token.str());
+            this.error(this.current_token.toString());
         }
 
         return results;
@@ -637,14 +596,14 @@ export class NodeVisitor {
 }
 
 export class Interpreter extends NodeVisitor {
-    parser: Parser;
+    tree: any;
 
     GLOBAL_SCOPE: {
         [index: string]: Token['value']
     } = {}
-    constructor(parser: Parser) {
+    constructor(tree: any) {
         super();
-        this.parser = parser;
+        this.tree = tree;
     }
 
     visit_Program(node: Program) {
@@ -712,12 +671,75 @@ export class Interpreter extends NodeVisitor {
     }
 
     interpret() {
-        const tree = this.parser.parse()
+        const tree = this.tree;
         if (!tree) {
             return ''
         }
         return this.visit(tree)
     }
+}
+
+export class SymbolTableBuilder extends NodeVisitor {
+    symtab: SymbolTable;
+    constructor() {
+        super();
+        this.symtab = new SymbolTable();
+    }
+
+    visit_Block(node: Block) {
+        node.declarations.forEach((decl) => {
+            this.visit(decl);
+        })
+        this.visit(node.compound_statement)
+    }
+
+    visit_Program(node: Program) {
+        this.visit(node.block);
+    }
+
+    visit_BinOp(node: BinOp) {
+        this.visit(node.left);
+        this.visit(node.right);
+    }
+
+    visit_Num(node: Num) {}
+
+    visit_UnaryOp(node: UnaryOp) {
+        this.visit(node.expr);
+    }
+
+    visit_Compound(node: Compound) {
+        node.child.forEach((child) => {
+            this.visit(child);
+        })
+    }
+
+    visit_VarDecl(node: VarDecl) {
+        const type_name = node.type_node.value;
+        const type_symbol = this.symtab.lookup(type_name.toString())
+        const var_name = node.var_node.value;
+        const var_symbol = new VarSymbol(var_name.toString(), type_symbol)
+        this.symtab.define(var_symbol);
+    }
+
+    visit_Assign(node: Assign) {
+        const var_name = node.left.value;
+        const var_symbol = this.symtab.lookup(var_name.toString());
+        if (!var_symbol) {
+            throw new NameError(var_name.toString())
+        }
+        this.visit(node.right)
+    }
+
+    visit_Var(node: Var) {
+        const var_name = node.value;
+        const var_symbol = this.symtab.lookup(var_name.toString());
+        if (!var_symbol) {
+            throw new NameError(var_name.toString());
+        }
+    }
+
+    visit_NoOp(node: NoOp) {}
 }
 
 function main() {
@@ -728,9 +750,13 @@ function main() {
         }
         let lexer = new Lexer(text);
         let parser = new Parser(lexer);
-        let interpreter = new Interpreter(parser);
+        const tree = parser.parse();
+        const symtab_builder = new SymbolTableBuilder();
+        symtab_builder.visit(tree);
+        console.log('symbol table contents: \n%s', symtab_builder.symtab)
+        let interpreter = new Interpreter(tree);
         interpreter.interpret()
-        console.log(interpreter.GLOBAL_SCOPE)
+        console.log('Runtime result: \n', interpreter.GLOBAL_SCOPE)
     })
 }
 

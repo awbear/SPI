@@ -1,7 +1,9 @@
+import { TokenType } from "./token";
+
 export class BaseSymbol {
   name: string;
-  type: string | null;
-  constructor(name: string, type: string | null = null) {
+  type: BaseSymbol | null;
+  constructor(name: string, type: BaseSymbol | null = null) {
     this.name = name;
     this.type = type;
   }
@@ -11,20 +13,18 @@ export class BuiltInTypeSymbol extends BaseSymbol {
   constructor(name: string) {
     super(name);
   }
-  str() {
+  toString() {
     return this.name;
   }
-  repr = this.str;
 }
 
 export class VarSymbol extends BaseSymbol {
-  constructor(name: string, type: string) {
+  constructor(name: string, type: BaseSymbol) {
     super(name, type);
   }
-  str() {
-    return `<${this.name}:${this.type}>`;
+  toString() {
+    return `<${this.name}:${this.type.toString()}>`;
   }
-  repr = this.str;
 }
 
 export class SymbolTable {
@@ -33,18 +33,25 @@ export class SymbolTable {
   }
   constructor() {
     this._symbol = {}
+    this._init_builtins();
   }
-  str() {
+
+  _init_builtins() {
+    this.define(new BuiltInTypeSymbol(TokenType.INTEGER))
+    this.define(new BuiltInTypeSymbol(TokenType.REAL))
+  }
+
+  toString() {
     return `Symbols: ${Object.values(this._symbol)}`
   }
-  repr = this.str;
 
   define(symbol: BaseSymbol) {
-    console.log('define: ', symbol)
+    console.log('define: %s', symbol)
     this._symbol[symbol.name] = symbol;
   }
 
   lookup(name: string) {
+    console.log('lookup: %s', name)
     return this._symbol[name]
   }
 }
