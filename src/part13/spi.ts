@@ -383,12 +383,14 @@ export class Parser {
     declarations() {
         const declarations = [];
         if (this.current_token.type === TokenType.VAR) {
-            this.eat(TokenType.VAR);
-            // @ts-ignore
-            while(this.current_token.type === TokenType.ID) {
-                const var_decl = this.variable_declaration();
-                declarations.push(...var_decl);
-                this.eat(TokenType.SEMI);
+            while (this.current_token.type === TokenType.VAR) {
+                this.eat(TokenType.VAR);
+                // @ts-ignore
+                while(this.current_token.type === TokenType.ID) {
+                    const var_decl = this.variable_declaration();
+                    declarations.push(...var_decl);
+                    this.eat(TokenType.SEMI);
+                }
             }
         }
         while (this.current_token.type === TokenType.PROCEDURE) {
