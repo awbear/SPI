@@ -426,7 +426,7 @@ export class Parser {
             this.eat(TokenType.ID);
             this.eat(TokenType.SEMI);
             const block_node = this.block() as Block;
-            const proc_decl = new ProcedureDecl(proc_name.toString(), block_node);
+            const proc_decl = new ProcedureDecl(proc_name.toString(), block_node, []);
             declarations.push(proc_decl);
             this.eat(TokenType.SEMI);
         }
@@ -735,7 +735,7 @@ export class SymbolTableBuilder extends NodeVisitor {
     symtab: ScopedSymbolTable;
     constructor() {
         super();
-        this.symtab = new ScopedSymbolTable();
+        this.symtab = new ScopedSymbolTable('global', 1);
     }
 
     visit_Block(node: Block) {
@@ -810,9 +810,14 @@ export class SemanticAnalyzer extends NodeVisitor {
         this.visit(node.compound_statement)
     }
 
+    visit_UnaryOp(node: UnaryOp) {
+        this.visit(node.expr);
+    }
+
     visit_Program(node: Program) {
         console.log('Enter scope: global')
-        const global_scope = new ScopedSymbolTable('global', 1, this.current_scope.enclosing_scope)
+        const enclosing_scope = this.current_scope ? this.current_scope.enclosing_scope : null;
+        const global_scope = new ScopedSymbolTable('global', 1, enclosing_scope)
         this.current_scope = global_scope;
         this.visit(node.block);
 
@@ -827,6 +832,8 @@ export class SemanticAnalyzer extends NodeVisitor {
         })
     }
 
+    visit_Num() {}
+
     visit_NoOp(node: NoOp) {}
 
     visit_VarDecl(node: VarDecl) {
@@ -836,7 +843,7 @@ export class SemanticAnalyzer extends NodeVisitor {
         const var_name = node.var_node.value.toString();
         const var_symbol = new VarSymbol(var_name, type_symbol)
 
-        if (this.current_scope.lookup(var_name)) {
+        if (this.current_scope.lookup(var_name, true)) {
             throw new Error(`Duplicate identifier ${var_name} found`)
         }
 

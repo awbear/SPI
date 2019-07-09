@@ -84,8 +84,17 @@ export class ScopedSymbolTable {
     this._symbol[symbol.name] = symbol;
   }
 
-  lookup(name: string) {
-    console.log('lookup: %s', name)
-    return this._symbol[name]
+  lookup(name: string, current_scope_only = false): BaseSymbol {
+    console.log('lookup: %s', name);
+    const symbol = this._symbol[name];
+    if (symbol) {
+      return symbol;
+    }
+    if (current_scope_only) {
+      return null;
+    }
+    if (this.enclosing_scope) {
+      return this.enclosing_scope.lookup(name);
+    }
   }
 }
