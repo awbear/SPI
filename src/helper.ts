@@ -17,7 +17,7 @@ export function isalpha(ch: any) {
 
 export function enumKeys(E: object) {
   // @ts-ignore
-  return Object.keys(E).filter(k => isNaN(Number(k)) === false);
+  return Object.keys(E).filter(k => isNaN(Number(k)) === true);
 }
 
 export function enumValues(E: object) {

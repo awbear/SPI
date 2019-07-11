@@ -1,9 +1,8 @@
-PROGRAM SymTab6;
+PROGRAM MAIN;
 VAR
-   x, y : INTEGER;
-VAR
-   y : INTEGER;
+   A : INTEGER;
+   A : REAL; { SEMANTIC ERROR }
 
-BEGIN
-   x := x + y;
-END.
+BEGIN { MAIN }
+   A := 5;
+END.  { MAIN }

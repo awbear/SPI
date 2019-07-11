@@ -23,3 +23,10 @@ export class LexerError extends GenernalError {};
 export class ParseError extends GenernalError {};
 
 export class SemanticError extends GenernalError {};
+
+export class NameError extends Error {
+  constructor(msg='') {
+    super('variable error: ' + msg);
+    this.name = this.constructor.name;
+  }
+}

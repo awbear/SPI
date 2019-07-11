@@ -6,66 +6,66 @@ import { ErrorCode, ParseError } from './error';
 export class AST {}
 
 export class BinOp extends AST {
-    left: AST;
-    op: Token;
-    right: AST;
-    constructor(left: AST, op: Token, right: AST) {
-        super();
-        this.left = left;
-        this.op = op;
-        this.right = right;
-    }
+  left: AST;
+  op: Token;
+  right: AST;
+  constructor(left: AST, op: Token, right: AST) {
+    super();
+    this.left = left;
+    this.op = op;
+    this.right = right;
+  }
 }
 
 export class UnaryOp extends AST {
-    op: Token;
-    expr: AST;
-    constructor(op: Token, expr: AST) {
-        super();
-        this.op = op;
-        this.expr = expr;
-    }
+  op: Token;
+  expr: AST;
+  constructor(op: Token, expr: AST) {
+    super();
+    this.op = op;
+    this.expr = expr;
+  }
 }
 
 
 export class Num extends AST {
-    token: Token;
-    value: Token['value'];
-    constructor(token: Token) {
-        super();
-        this.token = token;
-        this.value = token.value;
-    }
+  token: Token;
+  value: Token['value'];
+  constructor(token: Token) {
+    super();
+    this.token = token;
+    this.value = token.value;
+  }
 }
 
 /**
  * Represents a 'BEGIN ... END' block
  */
 export class Compound extends AST {
-    child: Array<AST>;
-    constructor() {
-        super();
-        this.child = []
-    }
-    add(node: AST) {
-        this.child.push(node)
-    }
+  child: Array<AST>;
+  constructor() {
+    super();
+    this.child = []
+  }
+  add(node: AST) {
+    this.child.push(node)
+  }
 }
 
 /**
  * represents assgin op `:=`
  */
 export class Assign extends AST {
-    left: Var;
-    token: Token;
-    op: Token;
-    right: AST;
-    constructor(left: Var, op: Token, right: AST) {
-        super();
-        this.left = left;
-        this.token = this.op = op;
-        this.right = right;
-    }
+  left: Var;
+  token: Token;
+  op: Token;
+  right: AST;
+  constructor(left: Var, op: Token, right: AST) {
+    super();
+    this.left = left;
+    this.token = this.op = op;
+    this.right = right;
+  }
 }
 
 /**
@@ -129,8 +129,8 @@ export class Type extends AST {
 
 export class Param extends AST {
     var_node: Var;
-    type_node: Token;
-    constructor(var_node: Var, type_node: Token) {
+    type_node: Type;
+    constructor(var_node: Var, type_node: Type) {
         super();
         this.var_node = var_node;
         this.type_node = type_node;
@@ -175,14 +175,15 @@ export class Parser {
      * program : PROGRAM variable SEMI block DOT
      */
     program() {
-        this.eat(TokenType.PROGRAM)
-        const var_node = this.variable();
-        const prog_name = var_node.value;
-        this.eat(TokenType.SEMI)
-        const block_node = this.block();
-        const prog_node = new Program(prog_name.toString(), block_node);
-        this.eat(TokenType.DOT);
-        return prog_node;
+      console.log(this.current_token, TokenType.PROGRAM)
+      this.eat(TokenType.PROGRAM)
+      const var_node = this.variable();
+      const prog_name = var_node.value;
+      this.eat(TokenType.SEMI)
+      const block_node = this.block();
+      const prog_node = new Program(prog_name.toString(), block_node);
+      this.eat(TokenType.DOT);
+      return prog_node;
     }
 
     /**
@@ -199,14 +200,37 @@ export class Parser {
      *                        | formal_parameters SEMI formal_parameter_list
      */
     formal_parameter_list() {
-      return []
+      if (this.current_token.type !== TokenType.ID) {
+        return []
+      }
+      let param_nodes = this.formal_parameters();
+      // @ts-ignore
+      while (this.current_token.type === TokenType.SEMI) {
+        this.eat(TokenType.SEMI);
+        param_nodes.push(...this.formal_parameters())
+      }
+      return param_nodes;
     }
 
     /**
      * formal_parameters : ID (COMMA ID)* COLON type_spec
      */
     formal_parameters() {
-        let param_nodes = []
+      let param_nodes: Param[] = []
+      let param_tokens = [this.current_token]
+      this.eat(TokenType.ID);
+      while(this.current_token.type === TokenType.COMMA) {
+        this.eat(TokenType.COMMA);
+        param_tokens.push(this.current_token);
+        this.eat(TokenType.ID)
+      }
+      this.eat(TokenType.COLON)
+      let type_node = this.type_spec();
+      param_tokens.forEach((param_token) => {
+        const param_node = new Param(new Var(param_token), type_node);
+        param_nodes.push(param_node);
+      })
+      return param_nodes;
     }
 
     /**
@@ -243,7 +267,7 @@ export class Parser {
       this.eat(TokenType.PROCEDURE);
       const proc_name = this.current_token.value;
       this.eat(TokenType.ID);
-      let params = []
+      let params: Param[] = []
 
       if (this.current_token.type === TokenType.LPAREN) {
         this.eat(TokenType.LPAREN);
@@ -317,9 +341,9 @@ export class Parser {
             results.push(this.statement())
         }
 
-        if (this.current_token.type === TokenType.ID) {
-            this.error(this.current_token.toString());
-        }
+        // if (this.current_token.type === TokenType.ID) {
+        //   this.error(ErrorCode.UNEXPECTED_TOKEN, this.current_token);
+        // }
 
         return results;
     }
@@ -331,12 +355,12 @@ export class Parser {
      */
     statement() {
         switch(this.current_token.type) {
-            case TokenType.BEGIN:
-                return this.compound_statement();
-            case TokenType.ID:
-                return this.assignment_statement();
-            default:
-                return this.empty();
+          case TokenType.BEGIN:
+            return this.compound_statement();
+          case TokenType.ID:
+            return this.assignment_statement();
+          default:
+            return this.empty();
         }
     }
 
@@ -441,7 +465,7 @@ export class Parser {
     parse() {
         const node = this.program();
         if (this.current_token.type !== TokenType.EOF) {
-            this.error();
+          this.error(ErrorCode.UNEXPECTED_TOKEN, this.current_token);
         }
         return node;
     }

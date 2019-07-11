@@ -181,6 +181,6 @@ export class Lexer {
 
             this.error(this.current_char);
         }
-        return this.gen_token(TokenType.EOF)
+        return new Token(TokenType.EOF, null);
     }
 }
