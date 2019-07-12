@@ -1,6 +1,6 @@
 import { Token, TokenType, RESERVED_KEYWORDS } from './token'
 import { LexerError } from './error'
-import { isSpace, isalnum, isalpha, isdigit } from '../helper';
+import { isSpace, isalnum, isalpha, isdigit } from '../../helper';
 
 
 export class Lexer {

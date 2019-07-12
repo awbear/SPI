@@ -1,4 +1,4 @@
-import { isdigit, isSpace } from '../helper';
+import { isdigit, isSpace } from '../../helper';
 import * as readline from 'readline';
 
 enum TokenType {
@@ -7,8 +7,6 @@ enum TokenType {
     MINUS = 'MINUS',
     MUL = 'MUL',
     DIV = 'DIV',
-    LPAREN = '(',
-    RPAREN = ')',
     EOF = 'EOF',
 }
 
@@ -104,16 +102,6 @@ export class Lexer {
                 return new Token(TokenType.DIV, '/')
             }
 
-            if (this.current_char === '(') {
-                this.advance();
-                return new Token(TokenType.LPAREN, '(');
-            }
-
-            if (this.current_char === ')') {
-                this.advance();
-                return new Token(TokenType.RPAREN, ')');
-            }
-
 
             this.error(this.current_char);
         }
@@ -152,26 +140,19 @@ export class Interpreter {
 
     /**
      * return an INTEGER token value
-     * fator : INTEGER | LPAREN expr RPAREN
+     * fator : INTEGER
      */
-    factor(): number {
+    factor() {
         let token = this.current_token;
-        if (token.type === TokenType.INTEGER) {
-            this.eat(TokenType.INTEGER)
-            return token.value as number;
-        } else if (token.type === TokenType.LPAREN) {
-            this.eat(TokenType.LPAREN);
-            let result = this.expr();
-            this.eat(TokenType.RPAREN);
-            return result;
-        }
+        this.eat(TokenType.INTEGER)
+        return token.value as number;
     }
 
     /**
-     * term: factor ((MUL | DIV) factor) *
+     * term: factor ((MUL / DIV) factor) *
      */
     term() {
-        let result = this.factor();
+        let result = this.factor()
         while([TokenType.MUL, TokenType.DIV].includes(this.current_token.type)) {
             let token = this.current_token;
             if (token.type === TokenType.MUL) {
@@ -182,13 +163,13 @@ export class Interpreter {
                 result  = result / this.factor()
             }
         }
-        return result;
+        return result
     }
 
     /**
      * expr : term ((MUL / DIV) term)*
      * term : factor ((MUL | DIV) factor) *
-     * factor : INTEGER | LPAREN expr RPAREN
+     * factor : INTEGER
      *
      */
     expr() {
@@ -200,7 +181,7 @@ export class Interpreter {
                 result = result + this.term();
             } else if (token.type === TokenType.MINUS) {
                 this.eat(TokenType.MINUS);
-                result  = result - this.term();
+                result  = result - this.term()
             }
         }
         return result;

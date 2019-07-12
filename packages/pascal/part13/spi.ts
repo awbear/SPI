@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 
-import { isdigit, isSpace, isalnum, isalpha } from '../helper';
+import { isdigit, isSpace, isalnum, isalpha } from '../../helper';
 import { Token, TokenType } from './token'
 import { SymbolTable, VarSymbol } from './symbol';
 

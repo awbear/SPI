@@ -1,32 +1,8 @@
 import * as fs from 'fs';
 
-import { isdigit, isSpace, isalnum, isalpha } from '../helper';
-
-export enum TokenType {
-    INTEGER = 'INTEGER',
-    PLUS = 'PLUS',
-    MINUS = 'MINUS',
-    MUL = 'MUL',
-    DIV = 'DIV',
-    LPAREN = '(',
-    RPAREN = ')',
-    EOF = 'EOF',
-    BEGIN = 'BEGIN',
-    END = 'END',
-    ID = 'ID',
-    ASSIGN = ':=',
-    SEMI = ';',
-    DOT = '.',
-    PROGRAM = 'PROGRAM',
-    VAR = 'VAR',
-    COLON = 'COLON',
-    COMMA = 'COMMA',
-    REAL = 'REAL',
-    INTEGER_CONST = 'INTEGER_CONST',
-    REAL_CONST = 'REAL_CONST',
-    INTEGER_DIV = 'INTEGER_DIV',
-    FLOAT_DIV = 'FLOAT_DIV',
-}
+import { isdigit, isSpace, isalnum, isalpha } from '../../helper';
+import { Token, TokenType } from './token'
+import { ScopedSymbolTable, VarSymbol, ProcedureSymbol } from './symbol';
 
 class NameError extends Error {
     constructor(msg='') {
@@ -34,24 +10,6 @@ class NameError extends Error {
         this.name = this.constructor.name;
     }
 }
-
-export class Token {
-    type: TokenType;
-    value: string | number | null;
-    constructor(type: TokenType, value: string | number | null) {
-        this.type = type;
-        this.value = value;
-    }
-
-    str() {
-        return `Token(${this.type}, ${this.value})`
-    }
-
-    repr() {
-        return this.str()
-    }
-}
-
 
 export class Lexer {
     text: string;
@@ -69,6 +27,7 @@ export class Lexer {
         REAL: new Token(TokenType.REAL, 'REAL'),
         BEGIN: new Token(TokenType.BEGIN, 'BEGIN'),
         END: new Token(TokenType.END, 'END'),
+        PROCEDURE: new Token(TokenType.PROCEDURE, 'PROCEDURE'),
     }
 
     constructor(text: string) {
@@ -332,9 +291,9 @@ export class Program extends AST {
 }
 
 export class Block extends AST {
-    declarations: Array<VarDecl>;
+    declarations: Array<VarDecl | ProcedureDecl>;
     compound_statement: Compound;
-    constructor(declarations: Array<VarDecl>, compound_statement: Compound) {
+    constructor(declarations: Array<VarDecl | ProcedureDecl>, compound_statement: Compound) {
         super();
         this.declarations = declarations;
         this.compound_statement = compound_statement;
@@ -358,6 +317,28 @@ export class Type extends AST {
         super();
         this.token = token;
         this.value = token.value;
+    }
+}
+
+export class Param extends AST {
+    var_node: Var;
+    type_node: Token;
+    constructor(var_node: Var, type_node: Token) {
+        super();
+        this.var_node = var_node;
+        this.type_node = type_node;
+    }
+}
+
+export class ProcedureDecl extends AST {
+    proc_name: string
+    block_node: Block;
+    params: Array<Param>;
+    constructor(proc_name: string, block_node: Block, params: Array<Param>) {
+        super();
+        this.proc_name = proc_name;
+        this.block_node = block_node;
+        this.params = params;
     }
 }
 
@@ -407,19 +388,47 @@ export class Parser {
     }
 
     /**
-     * declarations : VAR (variable_declaration SEMI)+
-     *              | empty
+     * formal_parameter_list : formal_parameters
+     *                        | formal_parameters SEMI formal_parameter_list
+     */
+    formal_parameter_list() {
+
+    }
+
+    /**
+     * formal_parameters : ID (COMMA ID)* COLON type_spec
+     */
+    formal_parameters() {
+        let param_nodes = []
+    }
+
+    /**
+     * declarations : (VAR (variable_declaration SEMI)+)*
+     *               | (PROCEDURE ID (LPAREN formal_parameter_list RPAREN)? SEMI block SEMI)*
+     *               | empty
      */
     declarations() {
         const declarations = [];
         if (this.current_token.type === TokenType.VAR) {
-            this.eat(TokenType.VAR);
-            // @ts-ignore
-            while(this.current_token.type === TokenType.ID) {
-                const var_decl = this.variable_declaration();
-                declarations.push(...var_decl);
-                this.eat(TokenType.SEMI);
+            while (this.current_token.type === TokenType.VAR) {
+                this.eat(TokenType.VAR);
+                // @ts-ignore
+                while(this.current_token.type === TokenType.ID) {
+                    const var_decl = this.variable_declaration();
+                    declarations.push(...var_decl);
+                    this.eat(TokenType.SEMI);
+                }
             }
+        }
+        while (this.current_token.type === TokenType.PROCEDURE) {
+            this.eat(TokenType.PROCEDURE);
+            const proc_name = this.current_token.value;
+            this.eat(TokenType.ID);
+            this.eat(TokenType.SEMI);
+            const block_node = this.block() as Block;
+            const proc_decl = new ProcedureDecl(proc_name.toString(), block_node, []);
+            declarations.push(proc_decl);
+            this.eat(TokenType.SEMI);
         }
         return declarations;
     }
@@ -485,7 +494,7 @@ export class Parser {
         }
 
         if (this.current_token.type === TokenType.ID) {
-            this.error(this.current_token.str());
+            this.error(this.current_token.toString());
         }
 
         return results;
@@ -637,14 +646,14 @@ export class NodeVisitor {
 }
 
 export class Interpreter extends NodeVisitor {
-    parser: Parser;
+    tree: any;
 
     GLOBAL_SCOPE: {
         [index: string]: Token['value']
     } = {}
-    constructor(parser: Parser) {
+    constructor(tree: any) {
         super();
-        this.parser = parser;
+        this.tree = tree;
     }
 
     visit_Program(node: Program) {
@@ -659,6 +668,8 @@ export class Interpreter extends NodeVisitor {
     }
 
     visit_VarDecl(node: VarDecl) {}
+
+    visit_ProcedureDecl(node: ProcedureDecl) {}
 
     visit_Type(node: Type) {}
 
@@ -712,11 +723,175 @@ export class Interpreter extends NodeVisitor {
     }
 
     interpret() {
-        const tree = this.parser.parse()
+        const tree = this.tree;
         if (!tree) {
             return ''
         }
         return this.visit(tree)
+    }
+}
+
+export class SymbolTableBuilder extends NodeVisitor {
+    symtab: ScopedSymbolTable;
+    constructor() {
+        super();
+        this.symtab = new ScopedSymbolTable('global', 1);
+    }
+
+    visit_Block(node: Block) {
+        node.declarations.forEach((decl) => {
+            this.visit(decl);
+        })
+        this.visit(node.compound_statement)
+    }
+
+    visit_Program(node: Program) {
+        this.visit(node.block);
+    }
+
+    visit_BinOp(node: BinOp) {
+        this.visit(node.left);
+        this.visit(node.right);
+    }
+
+    visit_Num(node: Num) {}
+
+    visit_UnaryOp(node: UnaryOp) {
+        this.visit(node.expr);
+    }
+
+    visit_Compound(node: Compound) {
+        node.child.forEach((child) => {
+            this.visit(child);
+        })
+    }
+
+    visit_VarDecl(node: VarDecl) {
+        const type_name = node.type_node.value;
+        const type_symbol = this.symtab.lookup(type_name.toString())
+        const var_name = node.var_node.value;
+        const var_symbol = new VarSymbol(var_name.toString(), type_symbol)
+        this.symtab.define(var_symbol);
+    }
+
+    visit_ProcedureDecl(node: ProcedureDecl) {}
+
+    visit_Assign(node: Assign) {
+        const var_name = node.left.value;
+        const var_symbol = this.symtab.lookup(var_name.toString());
+        if (!var_symbol) {
+            throw new NameError(var_name.toString())
+        }
+        this.visit(node.right)
+    }
+
+    visit_Var(node: Var) {
+        const var_name = node.value;
+        const var_symbol = this.symtab.lookup(var_name.toString());
+        if (!var_symbol) {
+            throw new NameError(var_name.toString());
+        }
+    }
+
+    visit_NoOp(node: NoOp) {}
+}
+
+export class SemanticAnalyzer extends NodeVisitor {
+    current_scope: ScopedSymbolTable | null;
+    constructor() {
+        super();
+        this.current_scope = null;
+    }
+
+    visit_Block(node: Block) {
+        node.declarations.forEach((decl) => {
+            this.visit(decl);
+        })
+        this.visit(node.compound_statement)
+    }
+
+    visit_UnaryOp(node: UnaryOp) {
+        this.visit(node.expr);
+    }
+
+    visit_Program(node: Program) {
+        console.log('Enter scope: global')
+        const enclosing_scope = this.current_scope ? this.current_scope.enclosing_scope : null;
+        const global_scope = new ScopedSymbolTable('global', 1, enclosing_scope)
+        this.current_scope = global_scope;
+        this.visit(node.block);
+
+        console.log(global_scope)
+        this.current_scope = this.current_scope.enclosing_scope;
+        console.log('Leave scope: global');
+    }
+
+    visit_Compound(node: Compound) {
+        node.child.forEach((child) => {
+            this.visit(child);
+        })
+    }
+
+    visit_Num() {}
+
+    visit_NoOp(node: NoOp) {}
+
+    visit_VarDecl(node: VarDecl) {
+        const type_name = node.type_node.value
+        const type_symbol = this.current_scope.lookup(type_name.toString())
+
+        const var_name = node.var_node.value.toString();
+        const var_symbol = new VarSymbol(var_name, type_symbol)
+
+        if (this.current_scope.lookup(var_name, true)) {
+            throw new Error(`Duplicate identifier ${var_name} found`)
+        }
+
+        this.current_scope.insert(var_symbol);
+    }
+
+    visit_Var(node: Var) {
+        const var_name = node.value.toString();
+        const var_symbol = this.current_scope.lookup(var_name);
+        if (!var_symbol) {
+            throw new NameError(var_name);
+        }
+    }
+
+    visit_ProcedureDecl(node: ProcedureDecl) {
+        const proc_name = node.proc_name;
+        const proc_symbol = new ProcedureSymbol(proc_name)
+        this.current_scope.insert(proc_symbol)
+        console.log(`Enter scope: ${proc_name}`);
+        // Scope for parameters and local variables
+        const procedure_scope = new ScopedSymbolTable(proc_name, this.current_scope.scope_level + 1, this.current_scope);
+        this.current_scope = procedure_scope;
+        // Insert parameters into the procedure scope
+        node.params.forEach((param) => {
+            const param_type = this.current_scope.lookup(param.type_node.value.toString())
+            const param_name = param.var_node.value.toString();
+            const var_symbol = new VarSymbol(param_name, param_type);
+            this.current_scope.insert(var_symbol);
+            proc_symbol.params.push(var_symbol);
+        })
+        this.visit(node.block_node);
+        console.log(procedure_scope)
+        this.current_scope = this.current_scope.enclosing_scope;
+        console.log('Leave scope: ', proc_name);
+    }
+
+    visit_Assign(node: Assign) {
+        const var_name = node.left.value;
+        const var_symbol = this.current_scope.lookup(var_name.toString());
+        if (!var_symbol) {
+            throw new NameError(var_name.toString())
+        }
+        this.visit(node.right)
+    }
+
+    visit_BinOp(node: BinOp) {
+        this.visit(node.left);
+        this.visit(node.right);
     }
 }
 
@@ -728,9 +903,13 @@ function main() {
         }
         let lexer = new Lexer(text);
         let parser = new Parser(lexer);
-        let interpreter = new Interpreter(parser);
+        const tree = parser.parse();
+        const semantic_analyzer = new SemanticAnalyzer()
+        semantic_analyzer.visit(tree)
+        console.log('symbol table contents: \n%s', semantic_analyzer.current_scope)
+        let interpreter = new Interpreter(tree);
         interpreter.interpret()
-        console.log(interpreter.GLOBAL_SCOPE)
+        console.log('Runtime result: \n', interpreter.GLOBAL_SCOPE)
     })
 }
 

@@ -1,4 +1,4 @@
-import { enumKeys } from "../helper";
+import { enumKeys } from "../../helper";
 
 export enum TokenType {
   // single-character token types

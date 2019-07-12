@@ -1,9 +1,23 @@
 import * as fs from 'fs';
 
-import { isdigit, isSpace, isalnum, isalpha } from '../helper';
-import { Token, TokenType } from './token'
-import { SymbolTable, VarSymbol } from './symbol';
+import { isdigit, isSpace, isalnum, isalpha } from '../../helper';
 
+export enum TokenType {
+    INTEGER = 'INTEGER',
+    PLUS = 'PLUS',
+    MINUS = 'MINUS',
+    MUL = 'MUL',
+    DIV = 'DIV',
+    LPAREN = '(',
+    RPAREN = ')',
+    EOF = 'EOF',
+    BEGIN = 'BEGIN',
+    END = 'END',
+    ID = 'ID',
+    ASSIGN = ':=',
+    SEMI = ';',
+    DOT = '.',
+}
 
 class NameError extends Error {
     constructor(msg='') {
@@ -11,6 +25,24 @@ class NameError extends Error {
         this.name = this.constructor.name;
     }
 }
+
+export class Token {
+    type: TokenType;
+    value: string | number | null;
+    constructor(type: TokenType, value: string | number | null) {
+        this.type = type;
+        this.value = value;
+    }
+
+    str() {
+        return `Token(${this.type}, ${this.value})`
+    }
+
+    repr() {
+        return this.str()
+    }
+}
+
 
 export class Lexer {
     text: string;
@@ -21,11 +53,6 @@ export class Lexer {
     RESERVED_KEYWORDS: {
         [index: string]: Token
     } = {
-        PROGRAM: new Token(TokenType.PROGRAM, 'PROGRAM'),
-        VAR: new Token(TokenType.VAR, 'VAR'),
-        DIV: new Token(TokenType.INTEGER_DIV, 'DIV'),
-        INTEGER: new Token(TokenType.INTEGER, 'INTEGER'),
-        REAL: new Token(TokenType.REAL, 'REAL'),
         BEGIN: new Token(TokenType.BEGIN, 'BEGIN'),
         END: new Token(TokenType.END, 'END'),
     }
@@ -74,33 +101,16 @@ export class Lexer {
         }
     }
 
-    skip_comment() {
-        while(this.current_char !== '}') {
-            this.advance();
-        }
-        // skip the closing curly brace
-        this.advance();
-    }
-
     /**
      * return a (multidigit) integer consumed from the input
      */
-    number() {
+    integer() {
         let result = '';
         while(this.current_char && (isdigit(this.current_char))){
             result += this.current_char;
             this.advance();
         }
-        if (this.current_char === '.') {
-            result += this.current_char;
-            this.advance();
-            while (this.current_char && (isdigit(this.current_char))) {
-                result += this.current_char;
-                this.advance();
-            }
-            return new Token(TokenType.REAL_CONST, Number.parseFloat(result))
-        }
-        return new Token(TokenType.INTEGER_CONST, Number.parseInt(result, 10));
+        return Number.parseInt(result, 10);
     }
 
     get_next_token() {
@@ -110,19 +120,8 @@ export class Lexer {
                 continue;
             }
 
-            if (this.current_char === '{') {
-                this.advance();
-                this.skip_comment();
-                continue;
-            }
-
             if (isdigit(this.current_char)) {
-                return this.number();
-            }
-
-            if (this.current_char === ',') {
-                this.advance();
-                return new Token(TokenType.COMMA, ',');
+                return new Token(TokenType.INTEGER, this.integer())
             }
 
             if (this.current_char === '+') {
@@ -142,7 +141,7 @@ export class Lexer {
 
             if (this.current_char === '/') {
                 this.advance();
-                return new Token(TokenType.FLOAT_DIV, '/')
+                return new Token(TokenType.DIV, '/')
             }
 
             if (this.current_char === '(') {
@@ -163,11 +162,6 @@ export class Lexer {
                 this.advance();
                 this.advance();
                 return new Token(TokenType.ASSIGN, ':=')
-            }
-
-            if (this.current_char === ':') {
-                this.advance()
-                return new Token(TokenType.COLON, ':');
             }
 
             if (this.current_char === ';') {
@@ -280,46 +274,6 @@ export class NoOp extends AST {
     }
 }
 
-export class Program extends AST {
-    name: string;
-    block: Block;
-    constructor(name: string, block: Block) {
-        super();
-        this.name = name;
-        this.block = block;
-    }
-}
-
-export class Block extends AST {
-    declarations: Array<VarDecl>;
-    compound_statement: Compound;
-    constructor(declarations: Array<VarDecl>, compound_statement: Compound) {
-        super();
-        this.declarations = declarations;
-        this.compound_statement = compound_statement;
-    }
-}
-
-export class VarDecl extends AST {
-    var_node: Var;
-    type_node: Type;
-    constructor(var_node: Var, type_node: Type) {
-        super();
-        this.var_node = var_node;
-        this.type_node = type_node;
-    }
-}
-
-export class Type extends AST {
-    token: Token;
-    value: Token['value'];
-    constructor(token: Token) {
-        super();
-        this.token = token;
-        this.value = token.value;
-    }
-}
-
 export class Parser {
     lexer: Lexer;
     current_token: Token | null;
@@ -343,77 +297,12 @@ export class Parser {
     }
 
     /**
-     * program : PROGRAM variable SEMI block DOT
+     * program: compound_statement DOT
      */
     program() {
-        this.eat(TokenType.PROGRAM)
-        const var_node = this.variable();
-        const prog_name = var_node.value;
-        this.eat(TokenType.SEMI)
-        const block_node = this.block();
-        const prog_node = new Program(prog_name.toString(), block_node);
+        const node = this.compound_statement();
         this.eat(TokenType.DOT);
-        return prog_node;
-    }
-
-    /**
-     * block : declarations compound_statement
-     */
-    block() {
-        const declaration_nodes = this.declarations();
-        const compound_statement_node = this.compound_statement();
-        return new Block(declaration_nodes, compound_statement_node);
-    }
-
-    /**
-     * declarations : VAR (variable_declaration SEMI)+
-     *              | empty
-     */
-    declarations() {
-        const declarations = [];
-        if (this.current_token.type === TokenType.VAR) {
-            this.eat(TokenType.VAR);
-            // @ts-ignore
-            while(this.current_token.type === TokenType.ID) {
-                const var_decl = this.variable_declaration();
-                declarations.push(...var_decl);
-                this.eat(TokenType.SEMI);
-            }
-        }
-        return declarations;
-    }
-
-    /**
-     * variable_declaration : ID (COMMA ID)* COLON type_spec
-     */
-    variable_declaration() {
-        // first ID
-        const var_nodes = [new Var(this.current_token)];
-        this.eat(TokenType.ID)
-        while(this.current_token.type === TokenType.COMMA) {
-            this.eat(TokenType.COMMA);
-            var_nodes.push(new Var(this.current_token))
-            this.eat(TokenType.ID);
-        }
-        this.eat(TokenType.COLON);
-        const type_node = this.type_spec();
-        return var_nodes.map((node) => {
-            return new VarDecl(node, type_node);
-        });
-    }
-
-    /**
-     * type_spec : INTEGER
-     *           | REAL
-     */
-    type_spec() {
-        const token = this.current_token;
-        if (token.type === TokenType.INTEGER) {
-            this.eat(TokenType.INTEGER)
-        } else {
-            this.eat(TokenType.REAL);
-        }
-        return new Type(token);
+        return node;
     }
 
     /**
@@ -444,7 +333,7 @@ export class Parser {
         }
 
         if (this.current_token.type === TokenType.ID) {
-            this.error(this.current_token.toString());
+            this.error(this.current_token.str());
         }
 
         return results;
@@ -494,8 +383,6 @@ export class Parser {
      * return an INTEGER token value
      * factor : PLUS  factor
      *        | MINUS factor
-     *        | INTEGER_CONST
-     *        | REAL_CONST
      *        | INTEGER
      *        | LPAREN expr RPAREN
      *        | variable
@@ -509,11 +396,8 @@ export class Parser {
             case TokenType.MINUS:
                 this.eat(TokenType.MINUS)
                 return new UnaryOp(token, this.factor());
-            case TokenType.INTEGER_CONST:
-                this.eat(TokenType.INTEGER_CONST);
-                return new Num(token);
-            case TokenType.REAL_CONST:
-                this.eat(TokenType.REAL_CONST);
+            case TokenType.INTEGER:
+                this.eat(TokenType.INTEGER);
                 return new Num(token);
             case TokenType.LPAREN:
                 this.eat(TokenType.LPAREN);
@@ -526,18 +410,16 @@ export class Parser {
     }
 
     /**
-     * term : factor ((MUL | INTEGER_DIV | FLOAT_DIV) factor)*
+     * term: factor ((MUL | DIV) factor) *
      */
     term() {
         let node = this.factor();
-        while([TokenType.MUL, TokenType.FLOAT_DIV, TokenType.INTEGER_DIV].includes(this.current_token.type)) {
+        while([TokenType.MUL, TokenType.DIV].includes(this.current_token.type)) {
             let token = this.current_token;
             if (token.type === TokenType.MUL) {
                 this.eat(TokenType.MUL)
-            } else if (token.type === TokenType.INTEGER_DIV) {
-                this.eat(TokenType.INTEGER_DIV);
-            } else if (token.type === TokenType.FLOAT_DIV) {
-                this.eat(TokenType.FLOAT_DIV);
+            } else if (token.type === TokenType.DIV) {
+                this.eat(TokenType.DIV);
             }
             node = new BinOp(node, token, this.factor())
         }
@@ -596,30 +478,15 @@ export class NodeVisitor {
 }
 
 export class Interpreter extends NodeVisitor {
-    tree: any;
+    parser: Parser;
 
     GLOBAL_SCOPE: {
         [index: string]: Token['value']
     } = {}
-    constructor(tree: any) {
+    constructor(parser: Parser) {
         super();
-        this.tree = tree;
+        this.parser = parser;
     }
-
-    visit_Program(node: Program) {
-        this.visit(node.block);
-    }
-
-    visit_Block(node: Block) {
-        node.declarations.forEach((item) => {
-            this.visit(item);
-        })
-        this.visit(node.compound_statement);
-    }
-
-    visit_VarDecl(node: VarDecl) {}
-
-    visit_Type(node: Type) {}
 
     visit_Compound(node: Compound) {
         node.child.forEach((child) => {
@@ -650,10 +517,8 @@ export class Interpreter extends NodeVisitor {
             return this.visit(node.left) - this.visit(node.right);
         } else if (t === TokenType.MUL) {
             return this.visit(node.left) * this.visit(node.right);
-        } else if (t === TokenType.FLOAT_DIV) {
+        } else if (t === TokenType.DIV) {
             return this.visit(node.left) / this.visit(node.right);
-        } else if (t === TokenType.INTEGER_DIV) {
-            return Number.parseInt((this.visit(node.left) / this.visit(node.right)).toFixed(0), 10);
         }
     }
 
@@ -671,75 +536,12 @@ export class Interpreter extends NodeVisitor {
     }
 
     interpret() {
-        const tree = this.tree;
+        const tree = this.parser.parse()
         if (!tree) {
             return ''
         }
         return this.visit(tree)
     }
-}
-
-export class SymbolTableBuilder extends NodeVisitor {
-    symtab: SymbolTable;
-    constructor() {
-        super();
-        this.symtab = new SymbolTable();
-    }
-
-    visit_Block(node: Block) {
-        node.declarations.forEach((decl) => {
-            this.visit(decl);
-        })
-        this.visit(node.compound_statement)
-    }
-
-    visit_Program(node: Program) {
-        this.visit(node.block);
-    }
-
-    visit_BinOp(node: BinOp) {
-        this.visit(node.left);
-        this.visit(node.right);
-    }
-
-    visit_Num(node: Num) {}
-
-    visit_UnaryOp(node: UnaryOp) {
-        this.visit(node.expr);
-    }
-
-    visit_Compound(node: Compound) {
-        node.child.forEach((child) => {
-            this.visit(child);
-        })
-    }
-
-    visit_VarDecl(node: VarDecl) {
-        const type_name = node.type_node.value;
-        const type_symbol = this.symtab.lookup(type_name.toString())
-        const var_name = node.var_node.value;
-        const var_symbol = new VarSymbol(var_name.toString(), type_symbol)
-        this.symtab.define(var_symbol);
-    }
-
-    visit_Assign(node: Assign) {
-        const var_name = node.left.value;
-        const var_symbol = this.symtab.lookup(var_name.toString());
-        if (!var_symbol) {
-            throw new NameError(var_name.toString())
-        }
-        this.visit(node.right)
-    }
-
-    visit_Var(node: Var) {
-        const var_name = node.value;
-        const var_symbol = this.symtab.lookup(var_name.toString());
-        if (!var_symbol) {
-            throw new NameError(var_name.toString());
-        }
-    }
-
-    visit_NoOp(node: NoOp) {}
 }
 
 function main() {
@@ -750,13 +552,9 @@ function main() {
         }
         let lexer = new Lexer(text);
         let parser = new Parser(lexer);
-        const tree = parser.parse();
-        const symtab_builder = new SymbolTableBuilder();
-        symtab_builder.visit(tree);
-        console.log('symbol table contents: \n%s', symtab_builder.symtab)
-        let interpreter = new Interpreter(tree);
+        let interpreter = new Interpreter(parser);
         interpreter.interpret()
-        console.log('Runtime result: \n', interpreter.GLOBAL_SCOPE)
+        console.log(interpreter.GLOBAL_SCOPE)
     })
 }
 

@@ -1,4 +1,4 @@
-import { isdigit } from '../helper';
+import { isdigit } from '../../helper';
 import * as readline from 'readline';
 
 enum TokenType {

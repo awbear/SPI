@@ -1,4 +1,4 @@
-import { isdigit, isSpace } from '../helper';
+import { isdigit, isSpace } from '../../helper';
 import * as readline from 'readline';
 
 enum TokenType {
@@ -7,6 +7,8 @@ enum TokenType {
     MINUS = 'MINUS',
     MUL = 'MUL',
     DIV = 'DIV',
+    LPAREN = '(',
+    RPAREN = ')',
     EOF = 'EOF',
 }
 
@@ -102,6 +104,16 @@ export class Lexer {
                 return new Token(TokenType.DIV, '/')
             }
 
+            if (this.current_char === '(') {
+                this.advance();
+                return new Token(TokenType.LPAREN, '(');
+            }
+
+            if (this.current_char === ')') {
+                this.advance();
+                return new Token(TokenType.RPAREN, ')');
+            }
+
 
             this.error(this.current_char);
         }
@@ -140,20 +152,25 @@ export class Interpreter {
 
     /**
      * return an INTEGER token value
-     * fator : INTEGER
+     * fator : INTEGER | LPAREN expr RPAREN
      */
-    factor() {
+    factor(): number {
         let token = this.current_token;
-        this.eat(TokenType.INTEGER)
-        return token.value as number;
+        if (token.type === TokenType.INTEGER) {
+            this.eat(TokenType.INTEGER)
+            return token.value as number;
+        } else if (token.type === TokenType.LPAREN) {
+            this.eat(TokenType.LPAREN);
+            let result = this.expr();
+            this.eat(TokenType.RPAREN);
+            return result;
+        }
     }
 
     /**
-     * expr : factor ((MUL / DIV) factor)*
-     * factor : INTEGER
-     *
+     * term: factor ((MUL | DIV) factor) *
      */
-    expr() {
+    term() {
         let result = this.factor();
         while([TokenType.MUL, TokenType.DIV].includes(this.current_token.type)) {
             let token = this.current_token;
@@ -163,6 +180,27 @@ export class Interpreter {
             } else if (token.type === TokenType.DIV) {
                 this.eat(TokenType.DIV);
                 result  = result / this.factor()
+            }
+        }
+        return result;
+    }
+
+    /**
+     * expr : term ((MUL / DIV) term)*
+     * term : factor ((MUL | DIV) factor) *
+     * factor : INTEGER | LPAREN expr RPAREN
+     *
+     */
+    expr() {
+        let result = this.term();
+        while([TokenType.PLUS, TokenType.MINUS].includes(this.current_token.type)) {
+            let token = this.current_token;
+            if (token.type === TokenType.PLUS) {
+                this.eat(TokenType.PLUS)
+                result = result + this.term();
+            } else if (token.type === TokenType.MINUS) {
+                this.eat(TokenType.MINUS);
+                result  = result - this.term();
             }
         }
         return result;

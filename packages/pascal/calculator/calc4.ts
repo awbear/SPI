@@ -1,4 +1,4 @@
-import { isdigit, isSpace } from '../helper';
+import { isdigit, isSpace } from '../../helper';
 import * as readline from 'readline';
 
 enum TokenType {
@@ -149,10 +149,12 @@ export class Interpreter {
     }
 
     /**
-     * term: factor ((MUL / DIV) factor) *
+     * expr : factor ((MUL / DIV) factor)*
+     * factor : INTEGER
+     *
      */
-    term() {
-        let result = this.factor()
+    expr() {
+        let result = this.factor();
         while([TokenType.MUL, TokenType.DIV].includes(this.current_token.type)) {
             let token = this.current_token;
             if (token.type === TokenType.MUL) {
@@ -161,27 +163,6 @@ export class Interpreter {
             } else if (token.type === TokenType.DIV) {
                 this.eat(TokenType.DIV);
                 result  = result / this.factor()
-            }
-        }
-        return result
-    }
-
-    /**
-     * expr : term ((MUL / DIV) term)*
-     * term : factor ((MUL | DIV) factor) *
-     * factor : INTEGER
-     *
-     */
-    expr() {
-        let result = this.term();
-        while([TokenType.PLUS, TokenType.MINUS].includes(this.current_token.type)) {
-            let token = this.current_token;
-            if (token.type === TokenType.PLUS) {
-                this.eat(TokenType.PLUS)
-                result = result + this.term();
-            } else if (token.type === TokenType.MINUS) {
-                this.eat(TokenType.MINUS);
-                result  = result - this.term()
             }
         }
         return result;

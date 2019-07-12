@@ -1,9 +1,32 @@
 import * as fs from 'fs';
 
-import { isdigit, isSpace, isalnum, isalpha } from '../helper';
-import { Token, TokenType } from './token'
-import { SymbolTable, VarSymbol } from './symbol';
+import { isdigit, isSpace, isalnum, isalpha } from '../../helper';
 
+export enum TokenType {
+    INTEGER = 'INTEGER',
+    PLUS = 'PLUS',
+    MINUS = 'MINUS',
+    MUL = 'MUL',
+    DIV = 'DIV',
+    LPAREN = '(',
+    RPAREN = ')',
+    EOF = 'EOF',
+    BEGIN = 'BEGIN',
+    END = 'END',
+    ID = 'ID',
+    ASSIGN = ':=',
+    SEMI = ';',
+    DOT = '.',
+    PROGRAM = 'PROGRAM',
+    VAR = 'VAR',
+    COLON = 'COLON',
+    COMMA = 'COMMA',
+    REAL = 'REAL',
+    INTEGER_CONST = 'INTEGER_CONST',
+    REAL_CONST = 'REAL_CONST',
+    INTEGER_DIV = 'INTEGER_DIV',
+    FLOAT_DIV = 'FLOAT_DIV',
+}
 
 class NameError extends Error {
     constructor(msg='') {
@@ -11,6 +34,24 @@ class NameError extends Error {
         this.name = this.constructor.name;
     }
 }
+
+export class Token {
+    type: TokenType;
+    value: string | number | null;
+    constructor(type: TokenType, value: string | number | null) {
+        this.type = type;
+        this.value = value;
+    }
+
+    str() {
+        return `Token(${this.type}, ${this.value})`
+    }
+
+    repr() {
+        return this.str()
+    }
+}
+
 
 export class Lexer {
     text: string;
@@ -28,7 +69,6 @@ export class Lexer {
         REAL: new Token(TokenType.REAL, 'REAL'),
         BEGIN: new Token(TokenType.BEGIN, 'BEGIN'),
         END: new Token(TokenType.END, 'END'),
-        PROCEDURE: new Token(TokenType.PROCEDURE, 'PROCEDURE'),
     }
 
     constructor(text: string) {
@@ -292,9 +332,9 @@ export class Program extends AST {
 }
 
 export class Block extends AST {
-    declarations: Array<VarDecl | ProcedureDecl>;
+    declarations: Array<VarDecl>;
     compound_statement: Compound;
-    constructor(declarations: Array<VarDecl | ProcedureDecl>, compound_statement: Compound) {
+    constructor(declarations: Array<VarDecl>, compound_statement: Compound) {
         super();
         this.declarations = declarations;
         this.compound_statement = compound_statement;
@@ -318,16 +358,6 @@ export class Type extends AST {
         super();
         this.token = token;
         this.value = token.value;
-    }
-}
-
-export class ProcedureDecl extends AST {
-    proc_name: string
-    block_node: Block;
-    constructor(proc_name: string, block_node: Block) {
-        super();
-        this.proc_name = proc_name;
-        this.block_node = block_node;
     }
 }
 
@@ -378,7 +408,6 @@ export class Parser {
 
     /**
      * declarations : VAR (variable_declaration SEMI)+
-     *              | (PROCEDURE ID SEMI block SEMI)*
      *              | empty
      */
     declarations() {
@@ -391,16 +420,6 @@ export class Parser {
                 declarations.push(...var_decl);
                 this.eat(TokenType.SEMI);
             }
-        }
-        while (this.current_token.type === TokenType.PROCEDURE) {
-            this.eat(TokenType.PROCEDURE);
-            const proc_name = this.current_token.value;
-            this.eat(TokenType.ID);
-            this.eat(TokenType.SEMI);
-            const block_node = this.block() as Block;
-            const proc_decl = new ProcedureDecl(proc_name.toString(), block_node);
-            declarations.push(proc_decl);
-            this.eat(TokenType.SEMI);
         }
         return declarations;
     }
@@ -466,7 +485,7 @@ export class Parser {
         }
 
         if (this.current_token.type === TokenType.ID) {
-            this.error(this.current_token.toString());
+            this.error(this.current_token.str());
         }
 
         return results;
@@ -618,14 +637,14 @@ export class NodeVisitor {
 }
 
 export class Interpreter extends NodeVisitor {
-    tree: any;
+    parser: Parser;
 
     GLOBAL_SCOPE: {
         [index: string]: Token['value']
     } = {}
-    constructor(tree: any) {
+    constructor(parser: Parser) {
         super();
-        this.tree = tree;
+        this.parser = parser;
     }
 
     visit_Program(node: Program) {
@@ -640,8 +659,6 @@ export class Interpreter extends NodeVisitor {
     }
 
     visit_VarDecl(node: VarDecl) {}
-
-    visit_ProcedureDecl(node: ProcedureDecl) {}
 
     visit_Type(node: Type) {}
 
@@ -695,77 +712,12 @@ export class Interpreter extends NodeVisitor {
     }
 
     interpret() {
-        const tree = this.tree;
+        const tree = this.parser.parse()
         if (!tree) {
             return ''
         }
         return this.visit(tree)
     }
-}
-
-export class SymbolTableBuilder extends NodeVisitor {
-    symtab: SymbolTable;
-    constructor() {
-        super();
-        this.symtab = new SymbolTable();
-    }
-
-    visit_Block(node: Block) {
-        node.declarations.forEach((decl) => {
-            this.visit(decl);
-        })
-        this.visit(node.compound_statement)
-    }
-
-    visit_Program(node: Program) {
-        this.visit(node.block);
-    }
-
-    visit_BinOp(node: BinOp) {
-        this.visit(node.left);
-        this.visit(node.right);
-    }
-
-    visit_Num(node: Num) {}
-
-    visit_UnaryOp(node: UnaryOp) {
-        this.visit(node.expr);
-    }
-
-    visit_Compound(node: Compound) {
-        node.child.forEach((child) => {
-            this.visit(child);
-        })
-    }
-
-    visit_VarDecl(node: VarDecl) {
-        const type_name = node.type_node.value;
-        const type_symbol = this.symtab.lookup(type_name.toString())
-        const var_name = node.var_node.value;
-        const var_symbol = new VarSymbol(var_name.toString(), type_symbol)
-        this.symtab.define(var_symbol);
-    }
-
-    visit_ProcedureDecl(node: ProcedureDecl) {}
-
-    visit_Assign(node: Assign) {
-        const var_name = node.left.value;
-        const var_symbol = this.symtab.lookup(var_name.toString());
-        if (!var_symbol) {
-            throw new NameError(var_name.toString())
-        }
-        this.visit(node.right)
-    }
-
-    visit_Var(node: Var) {
-        const var_name = node.value;
-        const var_symbol = this.symtab.lookup(var_name.toString());
-        if (!var_symbol) {
-            throw new NameError(var_name.toString());
-        }
-    }
-
-    visit_NoOp(node: NoOp) {}
 }
 
 function main() {
@@ -776,13 +728,9 @@ function main() {
         }
         let lexer = new Lexer(text);
         let parser = new Parser(lexer);
-        const tree = parser.parse();
-        const symtab_builder = new SymbolTableBuilder();
-        symtab_builder.visit(tree);
-        console.log('symbol table contents: \n%s', symtab_builder.symtab)
-        let interpreter = new Interpreter(tree);
+        let interpreter = new Interpreter(parser);
         interpreter.interpret()
-        console.log('Runtime result: \n', interpreter.GLOBAL_SCOPE)
+        console.log(interpreter.GLOBAL_SCOPE)
     })
 }
 
