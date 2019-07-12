@@ -1,0 +1,7 @@
+PROGRAM MAIN;
+VAR
+   A : INTEGER;
+
+BEGIN { MAIN }
+   A := B;  { SEMANTIC ERROR }
+END.  { MAIN }

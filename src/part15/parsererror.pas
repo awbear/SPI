@@ -1,0 +1,7 @@
+PROGRAM MAIN;
+VAR
+   A : INTEGER;
+
+BEGIN { MAIN }
+   A := 5 + ;  { SYNTAX ERROR}
+END.  { MAIN }
